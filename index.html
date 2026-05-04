@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Household Chores</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #191919;
+    color: #e8e8e8;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .page-title { display: flex; align-items: center; gap: 12px; }
+  h1 { font-size: 28px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+
+  .new-btn {
+    background: #2a2a2a;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: #e8e8e8;
+    font-size: 13px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .new-btn:hover { background: #333; }
+
+  .subtitle { color: rgba(255,255,255,0.3); font-size: 13px; margin-bottom: 24px; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .search-wrap { position: relative; flex: 1; min-width: 180px; }
+  .search-wrap input {
+    width: 100%;
+    background: #2a2a2a;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: #e8e8e8;
+    font-size: 14px;
+    padding: 7px 10px 7px 32px;
+    outline: none;
+  }
+  .search-wrap input:focus { border-color: rgba(255,255,255,0.2); }
+  .search-wrap input::placeholder { color: rgba(255,255,255,0.3); }
+  .search-icon {
+    position: absolute; left: 9px; top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255,255,255,0.3); font-size: 13px; pointer-events: none;
+  }
+
+  select {
+    background: #2a2a2a;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: #e8e8e8;
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .summary-bar { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+
+  .summary-chip {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .chip-overdue { background: rgba(220,50,47,0.15); color: #ff6b6b; }
+  .chip-due-soon { background: rgba(210,123,45,0.15); color: #f0a050; }
+  .chip-ok { background: rgba(80,148,110,0.15); color: #6dbf99; }
+
+  .chore-header-row {
+    display: grid;
+    grid-template-columns: 1fr 120px 100px 90px 100px 28px 28px;
+    gap: 12px;
+    padding: 6px 12px;
+    color: rgba(255,255,255,0.35);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 6px;
+  }
+
+  .chore-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .chore-row {
+    display: grid;
+    grid-template-columns: 1fr 120px 100px 90px 100px 28px 28px;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    transition: background 0.1s;
+  }
+  .chore-row:hover { background: rgba(255,255,255,0.03); }
+  .chore-row:hover .del-chore, .chore-row:hover .edit-chore { opacity: 1; }
+  .chore-row.overdue { background: rgba(220,50,47,0.06); border-color: rgba(220,50,47,0.15); }
+  .chore-row.marked-today { opacity: 0.5; }
+
+  .task-name { font-size: 14px; color: #e8e8e8; }
+  .task-room { font-size: 12px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+
+  .frequency-pill {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+    display: inline-block;
+  }
+
+  .due-label { font-size: 13px; font-weight: 500; }
+  .due-overdue { color: #ff6b6b; }
+  .due-soon { color: #f0a050; }
+  .due-ok { color: rgba(255,255,255,0.5); }
+  .due-far { color: rgba(255,255,255,0.3); }
+
+  .difficulty { font-size: 12px; text-align: center; }
+
+  .done-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 5px;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .done-btn:hover { background: rgba(80,148,110,0.2); border-color: rgba(80,148,110,0.4); color: #6dbf99; }
+  .done-btn.marked { background: rgba(80,148,110,0.15); border-color: rgba(80,148,110,0.3); color: #6dbf99; cursor: default; }
+
+  .edit-chore {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.3);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+    transition: color 0.1s, opacity 0.1s;
+    line-height: 1;
+  }
+  .edit-chore:hover { color: rgba(255,255,255,0.7); }
+
+  .del-chore {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: rgba(255,80,80,0.6);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    transition: color 0.1s, opacity 0.1s;
+    line-height: 1;
+  }
+  .del-chore:hover { color: #ff5050; }
+
+  .status-bar { font-size: 12px; color: rgba(255,255,255,0.3); margin-bottom: 12px; height: 16px; }
+
+  .loading { text-align: center; color: rgba(255,255,255,0.25); padding: 60px 0; font-size: 13px; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: #252525;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 24px;
+    width: 440px;
+    max-width: 90vw;
+  }
+
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #fff; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 5px; }
+  .field input, .field select {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: #e8e8e8;
+    font-size: 14px;
+    padding: 8px 10px;
+    outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: rgba(255,255,255,0.25); }
+
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; }
+
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  .btn-cancel {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  .btn-cancel:hover { background: rgba(255,255,255,0.05); }
+
+  .btn-save {
+    background: #1e4fad;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+    padding: 7px 16px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .btn-save:hover { background: #2860d0; }
+  .btn-save:disabled { opacity: 0.5; cursor: default; }
+
+  .section-block { margin-bottom: 8px; }
+
+  .section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    user-select: none;
+    margin-bottom: 2px;
+  }
+  .section-toggle:hover { background: rgba(255,255,255,0.04); }
+
+  .section-chevron {
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    transition: transform 0.18s;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+  .section-chevron.open { transform: rotate(90deg); }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .section-overdue .section-label { color: #ff6b6b; }
+  .section-soon .section-label { color: #f0a050; }
+  .section-remaining .section-label { color: rgba(255,255,255,0.4); }
+
+  .section-count {
+    font-size: 11px;
+    color: rgba(255,255,255,0.25);
+    margin-left: 2px;
+  }
+
+  .section-rows { display: flex; flex-direction: column; gap: 2px; }
+  .section-rows.collapsed { display: none; }
+
+  @media (max-width: 640px) {
+    .chore-row, .chore-header-row {
+      grid-template-columns: 1fr 90px 80px 36px;
+    }
+    .chore-row > *:nth-child(3),
+    .chore-row > *:nth-child(4),
+    .chore-header-row > *:nth-child(3),
+    .chore-header-row > *:nth-child(4) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="page-header">
+    <div class="page-title">
+      <span style="font-size:28px">🏠</span>
+      <h1>Household Chores</h1>
+    </div>
+    <button class="new-btn" onclick="openModal(null)">+ New chore</button>
+  </div>
+  <div class="subtitle" id="today-label"></div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search" placeholder="Search tasks…" autocomplete="off" />
+    </div>
+    <select id="filter-room"><option value="">All rooms</option></select>
+    <select id="filter-freq">
+      <option value="">All frequencies</option>
+      <option value="Weeks">Weekly</option>
+      <option value="Months">Monthly</option>
+    </select>
+    <select id="sort-by">
+      <option value="due">Sort: Due date</option>
+      <option value="room">Sort: Room</option>
+      <option value="difficulty">Sort: Difficulty</option>
+    </select>
+  </div>
+
+  <div class="status-bar" id="status"></div>
+  <div class="summary-bar" id="summary-bar"></div>
+  <div class="chore-header-row">
+    <div>Task</div>
+    <div>Frequency</div>
+    <div>Due</div>
+    <div>Difficulty</div>
+    <div></div>
+    <div></div>
+  </div>
+  <div class="chore-list" id="chore-list"><div class="loading">Loading…</div></div>
+
+</div>
+
+<!-- Add chore modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2>Add chore</h2>
+    <div class="field">
+      <label>Task name</label>
+      <input type="text" id="m-name" placeholder="e.g. Clean windows" />
+    </div>
+    <div class="field">
+      <label>Room</label>
+      <select id="m-room">
+        <option value="Whole house">Whole house</option>
+        <option value="Kitchen">Kitchen</option>
+        <option value="Bathroom">Bathroom</option>
+        <option value="Living room">Living room</option>
+        <option value="MBR/Wardrobe">MBR/Wardrobe</option>
+        <option value="Office">Office</option>
+        <option value="Plants">Plants</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Every</label>
+        <input type="number" id="m-freq-val" value="2" min="1" />
+      </div>
+      <div class="field">
+        <label>Unit</label>
+        <select id="m-freq-basis">
+          <option value="Weeks">Weeks</option>
+          <option value="Months">Months</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Difficulty</label>
+      <select id="m-difficulty">
+        <option value="easy">🟢 Easy</option>
+        <option value="medium">🟡 Medium</option>
+        <option value="hard">🔴 Hard</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" id="m-save" onclick="saveChore()">Add chore</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SURL = 'https://pirxfzwhjfedheeasenc.supabase.co';
+const SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnhmendoamZlZGhlZWFzZW5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MTA2MjksImV4cCI6MjA5MjA4NjYyOX0.uSYJyC9v6xQD4IBNDtVcPkUe5RAE6D8v7vBEF467wFc';
+const sb = supabase.createClient(SURL, SKEY);
+
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+
+const SEED_CHORES = [
+  { name: "Vacuum, lint roll, dust, wipe all surfaces", room: "Whole house", freq_basis: "Weeks", freq_val: 2, difficulty: "hard" },
+  { name: "Clean mirrors and glass", room: "Whole house", freq_basis: "Weeks", freq_val: 2, difficulty: "medium" },
+  { name: "Clean windows and mesh", room: "Whole house", freq_basis: "Months", freq_val: 4, difficulty: "hard" },
+  { name: "Clean doorknobs, light switches & doors", room: "Whole house", freq_basis: "Weeks", freq_val: 2, difficulty: "medium" },
+  { name: "Mop floor", room: "Whole house", freq_basis: "Weeks", freq_val: 2, difficulty: "easy" },
+  { name: "Service aircon", room: "Whole house", freq_basis: "Months", freq_val: 6, difficulty: "easy" },
+  { name: "Chemical wash aircon", room: "Whole house", freq_basis: "Months", freq_val: 12, difficulty: "hard" },
+  { name: "Deep clean refrigerator", room: "Kitchen", freq_basis: "Months", freq_val: 12, difficulty: "hard" },
+  { name: "Wipe down kitchen surfaces", room: "Kitchen", freq_basis: "Weeks", freq_val: 2, difficulty: "easy" },
+  { name: "Deep clean washing machine", room: "Kitchen", freq_basis: "Months", freq_val: 4, difficulty: "medium" },
+  { name: "Deep clean dishwasher", room: "Kitchen", freq_basis: "Months", freq_val: 3, difficulty: "medium" },
+  { name: "Clean oven and microwave", room: "Kitchen", freq_basis: "Weeks", freq_val: 2, difficulty: "medium" },
+  { name: "Wash cooking hood", room: "Kitchen", freq_basis: "Months", freq_val: 2, difficulty: "medium" },
+  { name: "Clean dishrack", room: "Kitchen", freq_basis: "Weeks", freq_val: 2, difficulty: "easy" },
+  { name: "Clean kitchen sink", room: "Kitchen", freq_basis: "Weeks", freq_val: 2, difficulty: "easy" },
+  { name: "Wash dustbins", room: "Kitchen", freq_basis: "Months", freq_val: 3, difficulty: "medium" },
+  { name: "Wash toilet cloth, toilet mats, kitchen cloths", room: "Kitchen", freq_basis: "Weeks", freq_val: 2, difficulty: "easy" },
+  { name: "Change water dispenser filter", room: "Kitchen", freq_basis: "Months", freq_val: 12, difficulty: "easy" },
+  { name: "Deep clean chopping boards and maintain cookware", room: "Kitchen", freq_basis: "Months", freq_val: 3, difficulty: "medium" },
+  { name: "Clear and deep clean vacuum and robovacuum", room: "Kitchen", freq_basis: "Months", freq_val: 6, difficulty: "hard" },
+  { name: "General clean desks", room: "Office", freq_basis: "Weeks", freq_val: 2, difficulty: "easy" },
+  { name: "Change and wash bedsheet", room: "MBR/Wardrobe", freq_basis: "Weeks", freq_val: 2, difficulty: "medium" },
+  { name: "Wash duvet and protectors", room: "MBR/Wardrobe", freq_basis: "Months", freq_val: 3, difficulty: "medium" },
+  { name: "Rotate mattress", room: "MBR/Wardrobe", freq_basis: "Months", freq_val: 6, difficulty: "hard" },
+  { name: "Deep clean mattress", room: "MBR/Wardrobe", freq_basis: "Months", freq_val: 6, difficulty: "medium" },
+  { name: "Declutter closet", room: "MBR/Wardrobe", freq_basis: "Months", freq_val: 12, difficulty: "hard" },
+  { name: "Wash cats' litter boxes and automatic feeder", room: "MBR/Wardrobe", freq_basis: "Months", freq_val: 3, difficulty: "medium" },
+  { name: "Clean toilets", room: "Bathroom", freq_basis: "Weeks", freq_val: 2, difficulty: "easy" },
+  { name: "Cats' full grooming", room: "Bathroom", freq_basis: "Months", freq_val: 12, difficulty: "hard" },
+  { name: "Wash cats' water fountain", room: "Living room", freq_basis: "Weeks", freq_val: 1, difficulty: "easy" },
+  { name: "Change cats' water fountain filter", room: "Living room", freq_basis: "Months", freq_val: 3, difficulty: "easy" },
+  { name: "Clean and descale Nespresso machine", room: "Living room", freq_basis: "Months", freq_val: 6, difficulty: "medium" },
+  { name: "Wash cat beds, blankets, cushion covers", room: "Living room", freq_basis: "Months", freq_val: 1, difficulty: "easy" },
+  { name: "Spray Neem oil on plants", room: "Plants", freq_basis: "Weeks", freq_val: 1, difficulty: "easy" },
+];
+
+// Last done dates from Notion (baseline)
+const BASELINE = {
+  "Vacuum, lint roll, dust, wipe all surfaces": "2026-04-25",
+  "Clean mirrors and glass": "2026-04-25",
+  "Clean windows and mesh": "2026-01-30",
+  "Clean doorknobs, light switches & doors": "2026-04-25",
+  "Mop floor": "2026-04-25",
+  "Service aircon": "2026-04-29",
+  "Chemical wash aircon": "2025-06-07",
+  "Deep clean refrigerator": "2025-06-07",
+  "Wipe down kitchen surfaces": "2026-04-25",
+  "Deep clean washing machine": "2026-01-16",
+  "Deep clean dishwasher": "2026-04-07",
+  "Clean oven and microwave": "2026-04-25",
+  "Wash cooking hood": "2026-03-19",
+  "Clean dishrack": "2026-04-25",
+  "Clean kitchen sink": "2026-04-25",
+  "Wash dustbins": "2026-02-25",
+  "Wash toilet cloth, toilet mats, kitchen cloths": "2026-04-17",
+  "Deep clean chopping boards and maintain cookware": "2026-04-07",
+  "Clear and deep clean vacuum and robovacuum": "2025-12-08",
+  "General clean desks": "2026-04-25",
+  "Change and wash bedsheet": "2026-04-25",
+  "Wash duvet and protectors": "2026-02-06",
+  "Rotate mattress": "2025-11-08",
+  "Deep clean mattress": "2026-02-06",
+  "Declutter closet": "2025-06-07",
+  "Wash cats' litter boxes and automatic feeder": "2026-05-02",
+  "Clean toilets": "2026-04-25",
+  "Cats' full grooming": "2026-04-11",
+  "Wash cats' water fountain": "2026-05-02",
+  "Change cats' water fountain filter": "2026-04-02",
+  "Clean and descale Nespresso machine": "2026-01-08",
+  "Wash cat beds, blankets, cushion covers": "2026-04-03",
+  "Spray Neem oil on plants": "2026-03-07",
+};
+
+const DIFF_LABEL = { easy: "🟢 Easy", medium: "🟡 Medium", hard: "🔴 Hard" };
+const DIFF_ORDER = { easy: 0, medium: 1, hard: 2 };
+
+let chores = [];
+let lastDoneMap = {};
+let sectionOpen = { overdue: true, soon: true, remaining: true };
+
+function setStatus(msg) { document.getElementById("status").textContent = msg; }
+
+function todayStr() {
+  return TODAY.toISOString().slice(0,10);
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  const [y,m,d] = str.split("-").map(Number);
+  return new Date(y, m-1, d);
+}
+
+function calcNext(lastDoneStr, freqBasis, freqVal) {
+  const d = parseDate(lastDoneStr);
+  if (!d) return null;
+  const n = new Date(d);
+  if (freqBasis === "Weeks") n.setDate(n.getDate() + freqVal * 7);
+  else n.setMonth(n.getMonth() + freqVal);
+  return n;
+}
+
+function daysDiff(d) {
+  return Math.round((d - TODAY) / 86400000);
+}
+
+function dueLabel(days) {
+  if (days === null) return { text: "—", cls: "due-far" };
+  if (days < 0) return { text: `${Math.abs(days)}d overdue`, cls: "due-overdue" };
+  if (days === 0) return { text: "Due today", cls: "due-soon" };
+  if (days <= 7) return { text: `In ${days}d`, cls: "due-soon" };
+  if (days <= 30) return { text: `In ${days}d`, cls: "due-ok" };
+  return { text: `In ${days}d`, cls: "due-far" };
+}
+
+function freqLabel(basis, val) {
+  if (basis === "Weeks") return val === 1 ? "Every week" : `Every ${val} weeks`;
+  return val === 1 ? "Every month" : `Every ${val} months`;
+}
+
+async function load() {
+  // Load chore definitions
+  let { data: choreData, error: choreErr } = await sb.from("chores").select("*").order("created_at");
+  if (choreErr) { setStatus("Error loading chores."); return; }
+
+  if (choreData.length === 0) {
+    setStatus("Setting up chores…");
+    const { error: seedErr } = await sb.from("chores").insert(SEED_CHORES);
+    if (seedErr) { setStatus("Seed error."); return; }
+    const { data: seeded } = await sb.from("chores").select("*").order("created_at");
+    chores = seeded || [];
+  } else {
+    chores = choreData;
+  }
+
+  // Seed baseline logs into chore_logs if empty
+  const { count } = await sb.from("chore_logs").select("*", { count: "exact", head: true });
+  if (count === 0) {
+    const baseLogs = [];
+    chores.forEach(c => {
+      const date = BASELINE[c.name];
+      if (date) baseLogs.push({ chore_name: c.name, done_date: date });
+    });
+    if (baseLogs.length) await sb.from("chore_logs").insert(baseLogs);
+  }
+
+  // Load latest done date per chore
+  await refreshLogs();
+  populateRoomFilter();
+  render();
+  setStatus("");
+}
+
+async function refreshLogs() {
+  const { data } = await sb.from("chore_logs").select("chore_name, done_date").order("done_date", { ascending: false });
+  lastDoneMap = {};
+  (data || []).forEach(row => {
+    if (!lastDoneMap[row.chore_name]) lastDoneMap[row.chore_name] = row.done_date;
+  });
+}
+
+function populateRoomFilter() {
+  const rooms = [...new Set(chores.map(c => c.room).filter(Boolean))].sort();
+  const sel = document.getElementById("filter-room");
+  sel.innerHTML = '<option value="">All rooms</option>';
+  rooms.forEach(r => {
+    const o = document.createElement("option");
+    o.value = r; o.textContent = r;
+    sel.appendChild(o);
+  });
+}
+
+function buildTasks() {
+  return chores.map(c => {
+    const lastDone = lastDoneMap[c.name] || null;
+    const nextDate = calcNext(lastDone, c.freq_basis, c.freq_val);
+    const days = nextDate ? daysDiff(nextDate) : null;
+    const markedToday = lastDone === todayStr();
+    return { ...c, lastDone, nextDate, days, markedToday };
+  });
+}
+
+function buildRow(t) {
+  const due = dueLabel(t.days);
+  const isOverdue = (t.days??0) < 0 && !t.markedToday;
+  const row = document.createElement("div");
+  row.className = "chore-row" + (isOverdue ? " overdue" : "") + (t.markedToday ? " marked-today" : "");
+  row.innerHTML = `
+    <div>
+      <div class="task-name">${esc(t.name)}</div>
+      <div class="task-room">${esc(t.room)}</div>
+    </div>
+    <div><span class="frequency-pill">${freqLabel(t.freq_basis, t.freq_val)}</span></div>
+    <div class="due-label ${due.cls}">${due.text}</div>
+    <div class="difficulty">${DIFF_LABEL[t.difficulty]}</div>
+    <div>
+      <button class="done-btn ${t.markedToday ? "marked" : ""}" data-id="${t.id}">
+        ${t.markedToday ? "✓ Done" : "Mark done"}
+      </button>
+    </div>
+    <div><button class="edit-chore" title="Edit">✏️</button></div>
+    <div><button class="del-chore" title="Remove">×</button></div>
+  `;
+  row.querySelector(".done-btn").addEventListener("click", async function() {
+    if (this.classList.contains("marked")) return;
+    this.textContent = "…"; this.disabled = true;
+    await markDone(t.name);
+  });
+  row.querySelector(".edit-chore").addEventListener("click", () => openModal(t));
+  row.querySelector(".del-chore").addEventListener("click", () => deleteChore(t.id, t.name));
+  return row;
+}
+
+function buildSection(id, labelText, tasks, cls) {
+  if (tasks.length === 0) return null;
+  const block = document.createElement("div");
+  block.className = "section-block";
+
+  const toggle = document.createElement("div");
+  toggle.className = `section-toggle ${cls}`;
+  const isOpen = sectionOpen[id];
+  toggle.innerHTML = `
+    <span class="section-chevron ${isOpen ? "open" : ""}">▶</span>
+    <span class="section-label">${labelText}</span>
+    <span class="section-count">${tasks.length}</span>
+  `;
+
+  const rows = document.createElement("div");
+  rows.className = "section-rows" + (isOpen ? "" : " collapsed");
+  tasks.forEach(t => rows.appendChild(buildRow(t)));
+
+  toggle.addEventListener("click", () => {
+    sectionOpen[id] = !sectionOpen[id];
+    toggle.querySelector(".section-chevron").classList.toggle("open", sectionOpen[id]);
+    rows.classList.toggle("collapsed", !sectionOpen[id]);
+  });
+
+  block.appendChild(toggle);
+  block.appendChild(rows);
+  return block;
+}
+
+function render() {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const filterRoom = document.getElementById("filter-room").value;
+  const filterFreq = document.getElementById("filter-freq").value;
+  const sortBy = document.getElementById("sort-by").value;
+
+  let tasks = buildTasks().filter(t => {
+    if (q && !t.name.toLowerCase().includes(q) && !t.room.toLowerCase().includes(q)) return false;
+    if (filterRoom && t.room !== filterRoom) return false;
+    if (filterFreq && t.freq_basis !== filterFreq) return false;
+    return true;
+  });
+
+  const sortFn = sortBy === "room"
+    ? (a,b) => a.room.localeCompare(b.room) || (a.days??9999)-(b.days??9999)
+    : sortBy === "difficulty"
+    ? (a,b) => DIFF_ORDER[b.difficulty]-DIFF_ORDER[a.difficulty] || (a.days??9999)-(b.days??9999)
+    : (a,b) => (a.days??9999)-(b.days??9999);
+
+  tasks.sort(sortFn);
+
+  const overdueTasks   = tasks.filter(t => (t.days??0) < 0 && !t.markedToday);
+  const soonTasks      = tasks.filter(t => t.days !== null && t.days >= 0 && t.days <= 7);
+  const remainingTasks = tasks.filter(t => t.markedToday || t.days === null || t.days > 7);
+
+  document.getElementById("summary-bar").innerHTML = `
+    <span class="summary-chip chip-overdue">⚠️ ${overdueTasks.length} overdue</span>
+    <span class="summary-chip chip-due-soon">⏰ ${soonTasks.length} due this week</span>
+    <span class="summary-chip chip-ok">✅ ${remainingTasks.length} on track</span>
+  `;
+
+  const list = document.getElementById("chore-list");
+  list.innerHTML = "";
+
+  if (tasks.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.25);padding:48px 0">No tasks match your search.</div>';
+    return;
+  }
+
+  [
+    buildSection("overdue",   "Overdue",        overdueTasks,   "section-overdue"),
+    buildSection("soon",      "Due this week",  soonTasks,      "section-soon"),
+    buildSection("remaining", "Remaining",      remainingTasks, "section-remaining"),
+  ].forEach(el => el && list.appendChild(el));
+}
+
+async function markDone(choreName) {
+  const { error } = await sb.from("chore_logs").insert({ chore_name: choreName, done_date: todayStr() });
+  if (error) { setStatus("Error saving."); return; }
+  lastDoneMap[choreName] = todayStr();
+  render();
+}
+
+async function deleteChore(id, name) {
+  if (!confirm(`Remove "${name}"?`)) return;
+  setStatus("Removing…");
+  const { error } = await sb.from("chores").delete().eq("id", id);
+  if (error) { setStatus("Error removing."); return; }
+  chores = chores.filter(c => c.id !== id);
+  render();
+  setStatus("");
+}
+
+let editingId = null;
+
+function openModal(chore = null) {
+  editingId = chore ? chore.id : null;
+  document.getElementById("m-name").value = chore ? chore.name : "";
+  document.getElementById("m-room").value = chore ? chore.room : "Whole house";
+  document.getElementById("m-freq-val").value = chore ? chore.freq_val : "2";
+  document.getElementById("m-freq-basis").value = chore ? chore.freq_basis : "Weeks";
+  document.getElementById("m-difficulty").value = chore ? chore.difficulty : "easy";
+  document.querySelector(".modal h2").textContent = chore ? "Edit chore" : "Add chore";
+  document.getElementById("m-save").textContent = chore ? "Save changes" : "Add chore";
+  document.getElementById("modal").classList.add("open");
+  document.getElementById("m-name").focus();
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.remove("open");
+  editingId = null;
+}
+
+async function saveChore() {
+  const name = document.getElementById("m-name").value.trim();
+  const room = document.getElementById("m-room").value;
+  const freq_val = parseInt(document.getElementById("m-freq-val").value) || 1;
+  const freq_basis = document.getElementById("m-freq-basis").value;
+  const difficulty = document.getElementById("m-difficulty").value;
+  if (!name) { document.getElementById("m-name").focus(); return; }
+
+  const btn = document.getElementById("m-save");
+  btn.disabled = true; btn.textContent = editingId ? "Saving…" : "Adding…";
+
+  if (editingId) {
+    const { data, error } = await sb.from("chores").update({ name, room, freq_basis, freq_val, difficulty }).eq("id", editingId).select().single();
+    btn.disabled = false; btn.textContent = "Save changes";
+    if (error) { alert("Error saving changes."); return; }
+    const idx = chores.findIndex(c => c.id === editingId);
+    if (idx !== -1) chores[idx] = data;
+  } else {
+    const { data, error } = await sb.from("chores").insert({ name, room, freq_basis, freq_val, difficulty }).select().single();
+    btn.disabled = false; btn.textContent = "Add chore";
+    if (error) { alert("Error adding chore."); return; }
+    chores.push(data);
+  }
+
+  closeModal();
+  render();
+}
+
+function esc(str) {
+  return (str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+document.getElementById("today-label").textContent =
+  TODAY.toLocaleDateString("en-SG", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+document.getElementById("modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("modal")) closeModal();
+});
+document.getElementById("m-name").addEventListener("keydown", e => {
+  if (e.key === "Enter") saveChore();
+  if (e.key === "Escape") closeModal();
+});
+
+["search","filter-room","filter-freq","sort-by"].forEach(id => {
+  document.getElementById(id).addEventListener("input", render);
+  document.getElementById(id).addEventListener("change", render);
+});
+
+load();
+</script>
+</body>
+</html>
