@@ -302,13 +302,11 @@
   .section-rows.collapsed { display: none; }
 
   @media (max-width: 640px) {
-    .chore-row, .chore-header-row {
-      grid-template-columns: 1fr 90px 80px 36px;
-    }
+    .chore-header-row { display: none; }
+    .chore-row { grid-template-columns: 1fr auto 32px 32px; }
+    .chore-row > *:nth-child(2),
     .chore-row > *:nth-child(3),
-    .chore-row > *:nth-child(4),
-    .chore-header-row > *:nth-child(3),
-    .chore-header-row > *:nth-child(4) { display: none; }
+    .chore-row > *:nth-child(4) { display: none; }
   }
 </style>
 </head>
