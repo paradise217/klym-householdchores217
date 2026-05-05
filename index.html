@@ -120,12 +120,19 @@
     transition: background 0.1s;
   }
   .chore-row:hover { background: rgba(255,255,255,0.03); }
-  .chore-row:hover .del-chore, .chore-row:hover .edit-chore { opacity: 1; }
   .chore-row.overdue { background: rgba(220,50,47,0.06); border-color: rgba(220,50,47,0.15); }
   .chore-row.marked-today { opacity: 0.5; }
 
   .task-name { font-size: 14px; color: #e8e8e8; }
-  .task-room { font-size: 12px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+  .task-meta { font-size: 12px; color: rgba(255,255,255,0.35); margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .assignee-pill {
+    font-size: 11px;
+    background: rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.5);
+    padding: 1px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
 
   .frequency-pill {
     font-size: 12px;
@@ -160,27 +167,25 @@
   .done-btn.marked { background: rgba(80,148,110,0.15); border-color: rgba(80,148,110,0.3); color: #6dbf99; cursor: default; }
 
   .edit-chore {
-    opacity: 0;
     background: none;
     border: none;
     color: rgba(255,255,255,0.3);
     cursor: pointer;
     font-size: 13px;
     padding: 0;
-    transition: color 0.1s, opacity 0.1s;
+    transition: color 0.1s;
     line-height: 1;
   }
   .edit-chore:hover { color: rgba(255,255,255,0.7); }
 
   .del-chore {
-    opacity: 0;
     background: none;
     border: none;
     color: rgba(255,80,80,0.6);
     cursor: pointer;
     font-size: 16px;
     padding: 0;
-    transition: color 0.1s, opacity 0.1s;
+    transition: color 0.1s;
     line-height: 1;
   }
   .del-chore:hover { color: #ff5050; }
@@ -325,6 +330,7 @@
       <input type="text" id="search" placeholder="Search tasks…" autocomplete="off" />
     </div>
     <select id="filter-room"><option value="">All rooms</option></select>
+    <select id="filter-assignee"><option value="">All assignees</option></select>
     <select id="filter-freq">
       <option value="">All frequencies</option>
       <option value="Weeks">Weekly</option>
@@ -391,6 +397,15 @@
         <option value="medium">🟡 Medium</option>
         <option value="hard">🔴 Hard</option>
       </select>
+    </div>
+    <div class="field">
+      <label>Assigned to</label>
+      <input type="text" id="m-assigned" placeholder="e.g. PT helper, Cason, Ellerie" list="assignee-suggestions" autocomplete="off" />
+      <datalist id="assignee-suggestions">
+        <option value="Cason">
+        <option value="Ellerie">
+        <option value="PT helper">
+      </datalist>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
@@ -555,6 +570,7 @@ async function load() {
   // Load latest done date per chore
   await refreshLogs();
   populateRoomFilter();
+  populateAssigneeFilter();
   render();
   setStatus("");
 }
@@ -571,11 +587,22 @@ function populateRoomFilter() {
   const rooms = [...new Set(chores.map(c => c.room).filter(Boolean))].sort();
   const sel = document.getElementById("filter-room");
   sel.innerHTML = '<option value="">All rooms</option>';
-  rooms.forEach(r => {
-    const o = document.createElement("option");
-    o.value = r; o.textContent = r;
-    sel.appendChild(o);
-  });
+  rooms.forEach(r => { const o = document.createElement("option"); o.value = r; o.textContent = r; sel.appendChild(o); });
+}
+
+function populateAssigneeFilter() {
+  const assignees = [...new Set(chores.map(c => c.assigned_to).filter(Boolean))].sort();
+  const sel = document.getElementById("filter-assignee");
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All assignees</option>';
+  assignees.forEach(a => { const o = document.createElement("option"); o.value = a; o.textContent = a; sel.appendChild(o); });
+  if (cur) sel.value = cur;
+
+  // Also update the datalist suggestions
+  const dl = document.getElementById("assignee-suggestions");
+  const existing = ["Cason", "Ellerie", "PT helper"];
+  const extra = assignees.filter(a => !existing.includes(a));
+  dl.innerHTML = [...existing, ...extra].map(a => `<option value="${esc(a)}">`).join("");
 }
 
 function buildTasks() {
@@ -596,7 +623,10 @@ function buildRow(t) {
   row.innerHTML = `
     <div>
       <div class="task-name">${esc(t.name)}</div>
-      <div class="task-room">${esc(t.room)}</div>
+      <div class="task-meta">
+        <span>${esc(t.room)}</span>
+        ${t.assigned_to ? `<span class="assignee-pill">👤 ${esc(t.assigned_to)}</span>` : ""}
+      </div>
     </div>
     <div><span class="frequency-pill">${freqLabel(t.freq_basis, t.freq_val)}</span></div>
     <div class="due-label ${due.cls}">${due.text}</div>
@@ -651,12 +681,14 @@ function buildSection(id, labelText, tasks, cls) {
 function render() {
   const q = document.getElementById("search").value.trim().toLowerCase();
   const filterRoom = document.getElementById("filter-room").value;
+  const filterAssignee = document.getElementById("filter-assignee").value;
   const filterFreq = document.getElementById("filter-freq").value;
   const sortBy = document.getElementById("sort-by").value;
 
   let tasks = buildTasks().filter(t => {
     if (q && !t.name.toLowerCase().includes(q) && !t.room.toLowerCase().includes(q)) return false;
     if (filterRoom && t.room !== filterRoom) return false;
+    if (filterAssignee && t.assigned_to !== filterAssignee) return false;
     if (filterFreq && t.freq_basis !== filterFreq) return false;
     return true;
   });
@@ -720,6 +752,7 @@ function openModal(chore = null) {
   document.getElementById("m-freq-val").value = chore ? chore.freq_val : "2";
   document.getElementById("m-freq-basis").value = chore ? chore.freq_basis : "Weeks";
   document.getElementById("m-difficulty").value = chore ? chore.difficulty : "easy";
+  document.getElementById("m-assigned").value = chore ? (chore.assigned_to || "") : "";
   document.querySelector(".modal h2").textContent = chore ? "Edit chore" : "Add chore";
   document.getElementById("m-save").textContent = chore ? "Save changes" : "Add chore";
   document.getElementById("modal").classList.add("open");
@@ -737,25 +770,27 @@ async function saveChore() {
   const freq_val = parseInt(document.getElementById("m-freq-val").value) || 1;
   const freq_basis = document.getElementById("m-freq-basis").value;
   const difficulty = document.getElementById("m-difficulty").value;
+  const assigned_to = document.getElementById("m-assigned").value.trim() || null;
   if (!name) { document.getElementById("m-name").focus(); return; }
 
   const btn = document.getElementById("m-save");
   btn.disabled = true; btn.textContent = editingId ? "Saving…" : "Adding…";
 
   if (editingId) {
-    const { data, error } = await sb.from("chores").update({ name, room, freq_basis, freq_val, difficulty }).eq("id", editingId).select().single();
+    const { data, error } = await sb.from("chores").update({ name, room, freq_basis, freq_val, difficulty, assigned_to }).eq("id", editingId).select().single();
     btn.disabled = false; btn.textContent = "Save changes";
     if (error) { alert("Error saving changes."); return; }
     const idx = chores.findIndex(c => c.id === editingId);
     if (idx !== -1) chores[idx] = data;
   } else {
-    const { data, error } = await sb.from("chores").insert({ name, room, freq_basis, freq_val, difficulty }).select().single();
+    const { data, error } = await sb.from("chores").insert({ name, room, freq_basis, freq_val, difficulty, assigned_to }).select().single();
     btn.disabled = false; btn.textContent = "Add chore";
     if (error) { alert("Error adding chore."); return; }
     chores.push(data);
   }
 
   closeModal();
+  populateAssigneeFilter();
   render();
 }
 
@@ -774,7 +809,7 @@ document.getElementById("m-name").addEventListener("keydown", e => {
   if (e.key === "Escape") closeModal();
 });
 
-["search","filter-room","filter-freq","sort-by"].forEach(id => {
+["search","filter-room","filter-assignee","filter-freq","sort-by"].forEach(id => {
   document.getElementById(id).addEventListener("input", render);
   document.getElementById(id).addEventListener("change", render);
 });
